@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { authAPI } from '../lib/api';
 import { useAuthStore } from '../lib/store';
 
@@ -32,7 +32,7 @@ function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-blue-800">
       <div className="w-full max-w-md bg-white rounded-lg shadow-2xl p-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">Shared Expenses</h1>
-        
+
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
@@ -46,7 +46,8 @@ function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+              className="input-field"
+              placeholder="you@example.com"
               required
             />
           </div>
@@ -57,7 +58,8 @@ function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+              className="input-field"
+              placeholder="Enter your password"
               required
             />
           </div>
@@ -73,9 +75,9 @@ function LoginPage() {
 
         <p className="text-center text-gray-600 mt-6">
           Don't have an account?{' '}
-          <a href="/register" className="text-blue-600 hover:underline font-medium">
+          <Link to="/register" className="text-blue-600 hover:underline font-medium">
             Register
-          </a>
+          </Link>
         </p>
       </div>
     </div>

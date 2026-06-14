@@ -41,7 +41,7 @@ function RegisterPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-blue-800">
-      <div className="w-full max-w-md card shadow-2xl p-8">
+      <div className="w-full max-w-md bg-white rounded-lg shadow-2xl p-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center">Create Account</h1>
         <p className="text-gray-600 text-center mb-8">Join your group's expense tracking</p>
 
@@ -60,7 +60,8 @@ function RegisterPage() {
                 name="first_name"
                 value={formData.first_name}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+                className="input-field"
+                placeholder="John"
                 required
               />
             </div>
@@ -71,7 +72,8 @@ function RegisterPage() {
                 name="last_name"
                 value={formData.last_name}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+                className="input-field"
+                placeholder="Doe"
                 required
               />
             </div>
@@ -84,7 +86,8 @@ function RegisterPage() {
               name="email"
               value={formData.email}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+              className="input-field"
+              placeholder="you@example.com"
               required
             />
           </div>
@@ -96,7 +99,8 @@ function RegisterPage() {
               name="password"
               value={formData.password}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+              className="input-field"
+              placeholder="Minimum 8 characters"
               required
               minLength={8}
             />

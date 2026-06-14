@@ -8,8 +8,8 @@ interface Group {
   id: string;
   name: string;
   description?: string;
-  members: any[];
-  _count: { expenses: number };
+  members?: Array<{ user_id: string }>;
+  _count?: { expenses: number };
 }
 
 function DashboardPage() {
@@ -18,6 +18,8 @@ function DashboardPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
+  const [error, setError] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
 
@@ -28,9 +30,10 @@ function DashboardPage() {
   const fetchGroups = async () => {
     try {
       const { data } = await groupsAPI.getGroups();
-      setGroups(data.groups);
+      setGroups(Array.isArray(data.groups) ? data.groups : []);
     } catch (err) {
       console.error('Failed to fetch groups:', err);
+      setGroups([]);
     } finally {
       setIsLoading(false);
     }
@@ -38,23 +41,32 @@ function DashboardPage() {
 
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    setIsCreating(true);
+
     try {
-      const { data } = await groupsAPI.createGroup({
+      await groupsAPI.createGroup({
         name: newGroupName,
-        description: newGroupDesc
+        description: newGroupDesc || undefined,
       });
-      setGroups([...groups, data.group]);
       setNewGroupName('');
       setNewGroupDesc('');
       setShowCreateForm(false);
-    } catch (err) {
-      console.error('Failed to create group:', err);
+      await fetchGroups();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to create group');
+    } finally {
+      setIsCreating(false);
     }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
           <div>
@@ -62,7 +74,7 @@ function DashboardPage() {
             <p className="text-gray-600 text-sm mt-1">Welcome, {user?.first_name}!</p>
           </div>
           <button
-            onClick={logout}
+            onClick={handleLogout}
             className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition"
           >
             <LogOut size={20} />
@@ -71,20 +83,23 @@ function DashboardPage() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-12">
-        {/* Create Group Card */}
         {showCreateForm && (
           <div className="card mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Group</h2>
             <form onSubmit={handleCreateGroup} className="space-y-4">
+              {error && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                  {error}
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Group Name</label>
                 <input
                   type="text"
                   value={newGroupName}
                   onChange={(e) => setNewGroupName(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+                  className="input-field"
                   required
                   placeholder="e.g., Apartment, Trip, Project"
                 />
@@ -95,17 +110,20 @@ function DashboardPage() {
                   type="text"
                   value={newGroupDesc}
                   onChange={(e) => setNewGroupDesc(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+                  className="input-field"
                   placeholder="What is this group for?"
                 />
               </div>
               <div className="flex gap-4">
-                <button type="submit" className="btn-primary">
-                  Create Group
+                <button type="submit" className="btn-primary disabled:opacity-50" disabled={isCreating}>
+                  {isCreating ? 'Creating...' : 'Create Group'}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowCreateForm(false)}
+                  onClick={() => {
+                    setShowCreateForm(false);
+                    setError('');
+                  }}
                   className="btn-secondary"
                 >
                   Cancel
@@ -115,7 +133,6 @@ function DashboardPage() {
           </div>
         )}
 
-        {/* Groups Grid */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-gray-900">Your Groups</h2>
@@ -162,10 +179,10 @@ function DashboardPage() {
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 text-gray-700">
                       <Users size={18} />
-                      <span>{group.members.length} members</span>
+                      <span>{group.members?.length ?? 0} members</span>
                     </div>
                     <div className="text-sm text-gray-600">
-                      {group._count.expenses} expenses tracked
+                      {group._count?.expenses ?? 0} expenses tracked
                     </div>
                   </div>
 

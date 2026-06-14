@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../index.js';
 import { authMiddleware, AuthRequest } from '../lib/auth.js';
+import { resolveDatabaseUserId } from '../lib/userService.js';
 
 const router = Router();
 
@@ -20,20 +21,29 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       description: z.string().optional()
     }).parse(req.body);
 
+    const userId = await resolveDatabaseUserId(req.user.id, req.user.email);
+    if (!userId) {
+      res.status(401).json({ error: 'User account not found. Please log out and register again.' });
+      return;
+    }
+
     // Create group with creator as member
     const group = await prisma.group.create({
       data: {
         name,
         description,
-        created_by_id: req.user.id,
+        created_by_id: userId,
         members: {
           create: {
-            user_id: req.user.id,
+            user_id: userId,
             joined_at: new Date()
           }
         }
       },
-      include: { members: { include: { user: true } } }
+      include: {
+        members: { include: { user: true } },
+        _count: { select: { expenses: true } }
+      }
     });
 
     res.status(201).json({ success: true, group });
@@ -55,10 +65,16 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    const userId = await resolveDatabaseUserId(req.user.id, req.user.email);
+    if (!userId) {
+      res.status(401).json({ error: 'User account not found. Please log out and register again.' });
+      return;
+    }
+
     const groups = await prisma.group.findMany({
       where: {
         members: {
-          some: { user_id: req.user.id }
+          some: { user_id: userId }
         }
       },
       include: {

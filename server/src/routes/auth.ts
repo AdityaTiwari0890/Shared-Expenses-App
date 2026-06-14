@@ -1,49 +1,47 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { prisma } from '../index.js';
 import { hashPassword, comparePassword, generateToken, authMiddleware, AuthRequest } from '../lib/auth.js';
+import {
+  createUserRecord,
+  findUserByEmail,
+  findUserById,
+  migrateDevUserToDatabase,
+} from '../lib/userService.js';
+import { findDevUserByEmail } from '../lib/devStore.js';
+import { isDatabaseAvailable } from '../lib/database.js';
 
 const router = Router();
 
-// Validation schemas
 const RegisterSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   first_name: z.string().min(2),
-  last_name: z.string().min(2)
+  last_name: z.string().min(2),
 });
 
 const LoginSchema = z.object({
   email: z.string().email(),
-  password: z.string()
+  password: z.string(),
 });
 
-// Register
 router.post('/register', async (req: Request, res: Response) => {
   try {
     const { email, password, first_name, last_name } = RegisterSchema.parse(req.body);
 
-    // Check if user exists
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await findUserByEmail(email);
     if (existingUser) {
       res.status(400).json({ error: 'User already exists' });
       return;
     }
 
-    // Hash password
     const password_hash = await hashPassword(password);
-
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password_hash,
-        first_name,
-        last_name
-      }
+    const user = await createUserRecord({
+      email,
+      password_hash,
+      first_name,
+      last_name,
     });
 
-    // Generate token
     const token = generateToken(user.id, user.email);
 
     res.status(201).json({
@@ -52,9 +50,9 @@ router.post('/register', async (req: Request, res: Response) => {
         id: user.id,
         email: user.email,
         first_name: user.first_name,
-        last_name: user.last_name
+        last_name: user.last_name,
       },
-      token
+      token,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -66,26 +64,43 @@ router.post('/register', async (req: Request, res: Response) => {
   }
 });
 
-// Login
 router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = LoginSchema.parse(req.body);
 
-    // Find user
-    const user = await prisma.user.findUnique({ where: { email } });
+    let user = await findUserByEmail(email);
+
+    if (!user) {
+      const fileUser = findDevUserByEmail(email);
+      if (!fileUser) {
+        res.status(401).json({ error: 'Invalid credentials' });
+        return;
+      }
+
+      const isFilePasswordValid = await comparePassword(password, fileUser.password_hash);
+      if (!isFilePasswordValid) {
+        res.status(401).json({ error: 'Invalid credentials' });
+        return;
+      }
+
+      if (await isDatabaseAvailable()) {
+        user = await migrateDevUserToDatabase(email);
+      } else {
+        user = fileUser;
+      }
+    } else {
+      const isValid = await comparePassword(password, user.password_hash);
+      if (!isValid) {
+        res.status(401).json({ error: 'Invalid credentials' });
+        return;
+      }
+    }
+
     if (!user) {
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
 
-    // Compare password
-    const isValid = await comparePassword(password, user.password_hash);
-    if (!isValid) {
-      res.status(401).json({ error: 'Invalid credentials' });
-      return;
-    }
-
-    // Generate token
     const token = generateToken(user.id, user.email);
 
     res.json({
@@ -94,9 +109,9 @@ router.post('/login', async (req: Request, res: Response) => {
         id: user.id,
         email: user.email,
         first_name: user.first_name,
-        last_name: user.last_name
+        last_name: user.last_name,
       },
-      token
+      token,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -108,7 +123,6 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 });
 
-// Get current user
 router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
@@ -116,7 +130,11 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    let user = await findUserById(req.user.id);
+    if (!user && (await isDatabaseAvailable())) {
+      user = await migrateDevUserToDatabase(req.user.email);
+    }
+
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
@@ -126,7 +144,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
       id: user.id,
       email: user.email,
       first_name: user.first_name,
-      last_name: user.last_name
+      last_name: user.last_name,
     });
   } catch (error) {
     console.error('Get user error:', error);
