@@ -41,7 +41,7 @@ function RegisterPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-blue-800">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-2xl p-8">
+      <div className="w-full max-w-md card shadow-2xl p-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center">Create Account</h1>
         <p className="text-gray-600 text-center mb-8">Join your group's expense tracking</p>
 

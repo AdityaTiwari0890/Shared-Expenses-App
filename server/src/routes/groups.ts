@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { prisma } from '../index';
-import { authMiddleware, AuthRequest } from '../lib/auth';
+import { prisma } from '../index.js';
+import { authMiddleware, AuthRequest } from '../lib/auth.js';
 
 const router = Router();
 
@@ -96,7 +96,7 @@ router.get('/:groupId', async (req: AuthRequest, res: Response) => {
     }
 
     // Check if user is member
-    const isMember = group.members.some(m => m.user_id === req.user!.id);
+    const isMember = group.members.some((m: any) => m.user_id === req.user!.id);
     if (!isMember) {
       res.status(403).json({ error: 'Not a member of this group' });
       return;
@@ -138,7 +138,7 @@ router.post('/:groupId/members', async (req: AuthRequest, res: Response) => {
     }
 
     // Check if user already member
-    const existingMember = group.members.find(m => m.user_id === user_id);
+    const existingMember = group.members.find((m: any) => m.user_id === user_id);
     if (existingMember && !existingMember.left_at) {
       res.status(400).json({ error: 'User is already a member' });
       return;

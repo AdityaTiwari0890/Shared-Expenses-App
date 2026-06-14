@@ -2,13 +2,13 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { Decimal } from '@prisma/client/runtime/library';
 import Papa from 'papaparse';
-import { prisma } from '../index';
-import { authMiddleware, AuthRequest } from '../lib/auth';
+import { prisma } from '../index.js';
+import { authMiddleware, AuthRequest } from '../lib/auth.js';
 import {
   detectAnomalies,
   CSVRow,
   AnomalyDetectionResult
-} from '../services/anomalyDetectionService';
+} from '../services/anomalyDetectionService.js';
 
 const router = Router();
 
@@ -66,12 +66,12 @@ router.post('/:groupId/preview', async (req: AuthRequest, res: Response) => {
           }
         },
         anomalies: {
-          create: anomalyResults.anomalies.map(anomaly => ({
+          create: anomalyResults.anomalies.map((anomaly: any) => ({
             row_number: anomaly.rowIndex,
             anomaly_type: anomaly.type,
             severity: anomaly.severity,
             description: anomaly.description,
-            raw_data: anomaly.row,
+            raw_data: JSON.parse(JSON.stringify(anomaly.row)),
             action_taken: anomaly.suggestedAction,
             requires_approval: anomaly.requiresApproval
           }))
@@ -87,10 +87,10 @@ router.post('/:groupId/preview', async (req: AuthRequest, res: Response) => {
         total_rows: results.data.length,
         valid_rows: anomalyResults.validRows.length,
         rejected_rows: anomalyResults.rejectedRows.length,
-        critical_anomalies: anomalyResults.anomalies.filter(a => a.severity === 'CRITICAL').length,
-        high_anomalies: anomalyResults.anomalies.filter(a => a.severity === 'HIGH').length
+        critical_anomalies: anomalyResults.anomalies.filter((a: any) => a.severity === 'CRITICAL').length,
+        high_anomalies: anomalyResults.anomalies.filter((a: any) => a.severity === 'HIGH').length
       },
-      anomalies: anomalyResults.anomalies.map(a => ({
+      anomalies: anomalyResults.anomalies.map((a: any) => ({
         rowIndex: a.rowIndex,
         type: a.type,
         severity: a.severity,

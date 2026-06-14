@@ -4,11 +4,11 @@ import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 
 // Import routes
-import authRoutes from './routes/auth';
-import groupRoutes from './routes/groups';
-import expenseRoutes from './routes/expenses';
-import settlementRoutes from './routes/settlements';
-import importRoutes from './routes/import';
+import authRoutes from './routes/auth.js';
+import groupRoutes from './routes/groups.js';
+import expenseRoutes from './routes/expenses.js';
+import settlementRoutes from './routes/settlements.js';
+import importRoutes from './routes/import.js';
 
 // Load environment variables
 dotenv.config();

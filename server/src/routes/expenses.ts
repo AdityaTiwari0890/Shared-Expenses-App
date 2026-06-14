@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { Decimal } from '@prisma/client/runtime/library';
-import { prisma } from '../index';
-import { authMiddleware, AuthRequest } from '../lib/auth';
-import { calculateUserBalance } from '../services/balanceService';
+import { prisma } from '../index.js';
+import { authMiddleware, AuthRequest } from '../lib/auth.js';
+import { calculateUserBalance } from '../services/balanceService.js';
 
 const router = Router();
 
@@ -43,7 +43,7 @@ router.post('/:groupId/expenses', async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const userMembership = group.members.find(m => m.user_id === req.user!.id && !m.left_at);
+    const userMembership = group.members.find((m: any) => m.user_id === req.user!.id && !m.left_at);
     if (!userMembership) {
       res.status(403).json({ error: 'Not an active member of this group' });
       return;
@@ -101,7 +101,7 @@ router.get('/:groupId/expenses', async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const userMembership = group.members.find(m => m.user_id === req.user!.id);
+    const userMembership = group.members.find((m: any) => m.user_id === req.user!.id);
     if (!userMembership) {
       res.status(403).json({ error: 'Not a member of this group' });
       return;
@@ -146,7 +146,7 @@ router.get('/:groupId/expenses/:expenseId', async (req: AuthRequest, res: Respon
     }
 
     // Check membership
-    const isMember = expense.group.members.some(m => m.user_id === req.user!.id && !m.left_at);
+    const isMember = expense.group.members.some((m: any) => m.user_id === req.user!.id && !m.left_at);
     if (!isMember) {
       res.status(403).json({ error: 'Not a member of this group' });
       return;

@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { Decimal } from '@prisma/client/runtime/library';
-import { prisma } from '../index';
-import { authMiddleware, AuthRequest } from '../lib/auth';
+import { prisma } from '../index.js';
+import { authMiddleware, AuthRequest } from '../lib/auth.js';
 
 const router = Router();
 
@@ -90,7 +90,7 @@ router.get('/:groupId/settlements', async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const isMember = group.members.some(m => m.user_id === req.user!.id);
+    const isMember = group.members.some((m: any) => m.user_id === req.user!.id);
     if (!isMember) {
       res.status(403).json({ error: 'Not a member of this group' });
       return;

@@ -1,5 +1,5 @@
 import { Decimal } from '@prisma/client/runtime/library';
-import { prisma } from '../index';
+import { prisma } from '../index.js';
 
 /**
  * Calculate balance for a user in a group
@@ -67,7 +67,7 @@ export async function calculateUserBalance(
     }
 
     // If user owes money for this expense
-    const userSplit = expense.splits.find(s => s.user_id === userId);
+    const userSplit = expense.splits.find((s: any) => s.user_id === userId);
     if (userSplit && userSplit.amount_owed) {
       const owed = new Decimal(userSplit.amount_owed.toString());
       totalOwed = totalOwed.plus(owed);
