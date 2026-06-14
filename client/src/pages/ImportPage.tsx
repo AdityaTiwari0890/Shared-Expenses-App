@@ -156,7 +156,10 @@ function ImportPage() {
                 />
                 <p className="text-lg font-semibold text-gray-900">Click to upload CSV</p>
                 <p className="text-sm text-gray-600 mt-2">
-                  Upload a CSV with columns: date, description, paid_by, amount, currency, split_type, split_with, split_details, notes
+                  Columns: date, description, paid_by, amount, currency, split_type, split_with, split_details, notes
+                </p>
+                <p className="text-xs text-gray-500 mt-2">
+                  paid_by: blank = your name · split_with: friend names, &quot;all&quot;, or blank = only you
                 </p>
               </label>
             </div>

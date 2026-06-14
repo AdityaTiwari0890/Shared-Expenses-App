@@ -182,9 +182,9 @@ router.delete('/:groupId/expenses/:expenseId', async (req: AuthRequest, res: Res
       return;
     }
 
-    // Only creator can delete
-    if (expense.paid_by_id !== user.id) {
-      res.status(403).json({ error: 'Only creator can delete expense' });
+    const activeMembership = expense.group.members.find((m: any) => m.user_id === user.id && !m.left_at);
+    if (!activeMembership) {
+      res.status(403).json({ error: 'Not an active member of this group' });
       return;
     }
 
@@ -247,14 +247,122 @@ router.get('/:groupId/my-balance', async (req: AuthRequest, res: Response) => {
 
     const { balance, breakdown } = await calculateUserBalance(user.id, req.params.groupId);
 
+    const groupExpenses = await prisma.expense.findMany({
+      where: { group_id: req.params.groupId, is_settlement: false },
+      include: { splits: true },
+    });
+
+    let oweToOthers = 0;
+    let othersOweMe = 0;
+
+    for (const expense of groupExpenses) {
+      const total = parseFloat(expense.amount_original.toString());
+      const mySplit = expense.splits.find((s) => s.user_id === user.id);
+      const myShare = mySplit ? parseFloat(mySplit.amount_owed.toString()) : 0;
+
+      if (expense.paid_by_id === user.id) {
+        othersOweMe += total - myShare;
+      } else {
+        oweToOthers += myShare;
+      }
+    }
+
     res.json({
       userId: user.id,
       balance: balance.toString(),
-      breakdown
+      breakdown,
+      summary: {
+        oweToOthers: oweToOthers.toFixed(2),
+        othersOweMe: othersOweMe.toFixed(2),
+        netToPay: Math.max(oweToOthers - othersOweMe, 0).toFixed(2),
+        netToReceive: Math.max(othersOweMe - oweToOthers, 0).toFixed(2),
+      },
     });
   } catch (error) {
     console.error('Get balance error:', error);
     res.status(500).json({ error: 'Failed to calculate balance' });
+  }
+});
+
+// Export expenses as CSV
+router.get('/:groupId/export-csv', async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await getResolvedUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const group = await prisma.group.findUnique({
+      where: { id: req.params.groupId },
+      include: { 
+        members: { include: { user: true } },
+        expenses: { 
+          include: { 
+            splits: true,
+            paid_by: true
+          },
+          where: { is_settlement: false }
+        }
+      }
+    });
+
+    if (!group) {
+      res.status(404).json({ error: 'Group not found' });
+      return;
+    }
+
+    // Check if user is member
+    const userMembership = group.members.find((m: any) => m.user_id === user.id && !m.left_at);
+    if (!userMembership) {
+      res.status(403).json({ error: 'Not an active member of this group' });
+      return;
+    }
+
+    // Build CSV header
+    const headers = ['date', 'description', 'paid_by', 'amount', 'currency', 'split_type', 'split_with', 'split_details', 'notes'];
+    const csvLines: string[] = [headers.map(h => `"${h}"`).join(',')];
+
+    // Build CSV rows
+    for (const expense of group.expenses) {
+      const date = new Date(expense.date).toISOString().split('T')[0];
+      const description = expense.description.replace(/"/g, '""');
+      const paidBy = `${expense.paid_by.first_name} ${expense.paid_by.last_name}`;
+      const amount = expense.amount_original.toString();
+      const currency = expense.currency;
+      const splitType = expense.split_type;
+      
+      // Get all members involved in this split
+      const splitMemberIds = expense.splits.map(s => s.user_id);
+      const splitWithNames = group.members
+        .filter((m: any) => splitMemberIds.includes(m.user_id))
+        .map((m: any) => `${m.user.first_name} ${m.user.last_name}`)
+        .join(', ');
+      
+      const notes = expense.notes ? expense.notes.replace(/"/g, '""') : '';
+
+      const row = [
+        date,
+        description,
+        paidBy,
+        amount,
+        currency,
+        splitType,
+        splitWithNames,
+        '', // split_details
+        notes
+      ];
+
+      csvLines.push(row.map(field => `"${field}"`).join(','));
+    }
+
+    // Set response headers for file download
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="expenses-${group.name.replace(/[^a-z0-9]/gi, '_')}-${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send(csvLines.join('\n'));
+  } catch (error) {
+    console.error('Export CSV error:', error);
+    res.status(500).json({ error: 'Failed to export expenses' });
   }
 });
 
