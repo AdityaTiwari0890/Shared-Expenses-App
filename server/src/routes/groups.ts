@@ -98,6 +98,12 @@ router.get('/:groupId', async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    const userId = await resolveDatabaseUserId(req.user.id, req.user.email);
+    if (!userId) {
+      res.status(401).json({ error: 'User account not found. Please log out and register again.' });
+      return;
+    }
+
     const group = await prisma.group.findUnique({
       where: { id: req.params.groupId },
       include: {
@@ -112,7 +118,7 @@ router.get('/:groupId', async (req: AuthRequest, res: Response) => {
     }
 
     // Check if user is member
-    const isMember = group.members.some((m: any) => m.user_id === req.user!.id);
+    const isMember = group.members.some((m: any) => m.user_id === userId);
     if (!isMember) {
       res.status(403).json({ error: 'Not a member of this group' });
       return;

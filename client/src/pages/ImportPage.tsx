@@ -16,7 +16,11 @@ function ImportPage() {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
   const [csvContent, setCsvContent] = useState('');
+  const [fileName, setFileName] = useState('');
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [importLogId, setImportLogId] = useState('');
@@ -25,23 +29,58 @@ function ImportPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setError('');
+    setSuccessMessage('');
+    setSummary(null);
+    setAnomalies([]);
+    setImportLogId('');
+
     const text = await file.text();
     setCsvContent(text);
+    setFileName(file.name);
   };
 
   const handlePreview = async () => {
-    if (!csvContent) return;
+    if (!csvContent || !groupId) {
+      setError('Please upload a CSV file first');
+      return;
+    }
 
+    setError('');
+    setSuccessMessage('');
     setIsPreviewLoading(true);
+
     try {
-      const { data } = await importAPI.previewCSV(groupId!, csvContent);
+      const { data } = await importAPI.previewCSV(groupId, csvContent);
       setImportLogId(data.importLogId);
       setSummary(data.summary);
-      setAnomalies(data.anomalies);
-    } catch (err) {
-      console.error('Preview failed:', err);
+      setAnomalies(data.anomalies ?? []);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to analyze CSV. Please check the file format.');
     } finally {
       setIsPreviewLoading(false);
+    }
+  };
+
+  const handleCompleteImport = async () => {
+    if (!groupId || !importLogId) return;
+
+    setError('');
+    setIsFinalizing(true);
+
+    try {
+      const approvals: Record<string, boolean> = {};
+      anomalies.forEach((_, idx) => {
+        approvals[`anomaly-${idx}`] = true;
+      });
+
+      await importAPI.finalizeImport(groupId, importLogId, approvals);
+      setSuccessMessage('Import completed successfully!');
+      setTimeout(() => navigate(`/groups/${groupId}`), 1500);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to complete import');
+    } finally {
+      setIsFinalizing(false);
     }
   };
 
@@ -60,11 +99,10 @@ function ImportPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate(`/groups/${groupId}`)}
             className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
           >
             <ArrowLeft size={20} />
@@ -74,8 +112,19 @@ function ImportPage() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-4xl mx-auto px-6 py-12">
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+            {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
+            {successMessage}
+          </div>
+        )}
+
         {!summary ? (
           <div className="card">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Upload CSV File</h2>
@@ -91,7 +140,7 @@ function ImportPage() {
                 />
                 <p className="text-lg font-semibold text-gray-900">Click to upload CSV</p>
                 <p className="text-sm text-gray-600 mt-2">
-                  or drag and drop your expenses_export.csv file
+                  Upload a CSV with columns: date, description, paid_by, amount, currency, split_type, split_with, split_details, notes
                 </p>
               </label>
             </div>
@@ -99,7 +148,7 @@ function ImportPage() {
             {csvContent && (
               <div className="mt-6">
                 <p className="text-sm text-gray-600 mb-4">
-                  File loaded: {csvContent.split('\n').length - 1} rows
+                  File loaded: <strong>{fileName}</strong> ({Math.max(csvContent.split('\n').length - 1, 0)} rows)
                 </p>
                 <button
                   onClick={handlePreview}
@@ -113,11 +162,10 @@ function ImportPage() {
           </div>
         ) : (
           <>
-            {/* Summary */}
             <div className="card mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Import Summary</h2>
 
-              <div className="grid grid-cols-4 gap-4 mb-8">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <p className="text-sm text-gray-600">Total Rows</p>
                   <p className="text-2xl font-bold text-blue-600">{summary.total_rows}</p>
@@ -141,13 +189,12 @@ function ImportPage() {
                   <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="font-semibold">Critical issues found</p>
-                    <p className="text-sm">These rows will be skipped unless corrected</p>
+                    <p className="text-sm">Review anomalies below before completing import</p>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Anomalies */}
             {anomalies.length > 0 && (
               <div className="card mb-8">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">Detected Anomalies</h2>
@@ -168,7 +215,7 @@ function ImportPage() {
                             Suggested action: {anomaly.suggestedAction}
                           </p>
                           {anomaly.requiresApproval && (
-                            <p className="text-xs font-semibold mt-1">⚠️ Requires approval</p>
+                            <p className="text-xs font-semibold mt-1">Requires approval</p>
                           )}
                         </div>
                         <span className="text-xs font-bold px-2 py-1 bg-white bg-opacity-50 rounded">
@@ -181,18 +228,26 @@ function ImportPage() {
               </div>
             )}
 
-            {/* Actions */}
             <div className="card">
               <div className="flex gap-4">
-                <button onClick={() => { setSummary(null); setAnomalies([]); }} className="btn-secondary">
+                <button
+                  onClick={() => {
+                    setSummary(null);
+                    setAnomalies([]);
+                    setImportLogId('');
+                    setError('');
+                  }}
+                  className="btn-secondary"
+                >
                   Upload Different File
                 </button>
                 <button
-                  disabled={summary.critical_anomalies > 0}
+                  onClick={handleCompleteImport}
+                  disabled={isFinalizing || summary.critical_anomalies > 0}
                   className="btn-primary disabled:opacity-50"
                 >
                   <CheckCircle size={20} className="inline mr-2" />
-                  Complete Import
+                  {isFinalizing ? 'Importing...' : 'Complete Import'}
                 </button>
               </div>
             </div>

@@ -4,6 +4,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import Papa from 'papaparse';
 import { prisma } from '../index.js';
 import { authMiddleware, AuthRequest } from '../lib/auth.js';
+import { getResolvedUser } from '../lib/requestUser.js';
 import {
   detectAnomalies,
   CSVRow,
@@ -17,7 +18,8 @@ router.use(authMiddleware);
 // Upload and analyze CSV
 router.post('/:groupId/preview', async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) {
+    const user = await getResolvedUser(req);
+    if (!user) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
@@ -52,7 +54,7 @@ router.post('/:groupId/preview', async (req: AuthRequest, res: Response) => {
     // Store import log with anomalies (pending approval)
     const importLog = await prisma.importLog.create({
       data: {
-        user_id: req.user.id,
+        user_id: user.id,
         group_id: group.id,
         total_rows: results.data.length,
         valid_rows: anomalyResults.validRows.length,
@@ -112,7 +114,8 @@ router.post('/:groupId/preview', async (req: AuthRequest, res: Response) => {
 // Approve/reject anomalies and finalize import
 router.post('/:groupId/finalize/:importLogId', async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) {
+    const user = await getResolvedUser(req);
+    if (!user) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
@@ -131,7 +134,7 @@ router.post('/:groupId/finalize/:importLogId', async (req: AuthRequest, res: Res
       return;
     }
 
-    if (importLog.user_id !== req.user.id) {
+    if (importLog.user_id !== user.id) {
       res.status(403).json({ error: 'Can only approve own imports' });
       return;
     }
@@ -142,7 +145,7 @@ router.post('/:groupId/finalize/:importLogId', async (req: AuthRequest, res: Res
         where: { id: anomalyId },
         data: {
           approved_at: approved ? new Date() : null,
-          approved_by_id: approved ? req.user.id : null
+          approved_by_id: approved ? user.id : null
         }
       });
     }

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Decimal } from '@prisma/client/runtime/library';
 import { prisma } from '../index.js';
 import { authMiddleware, AuthRequest } from '../lib/auth.js';
+import { getResolvedUser } from '../lib/requestUser.js';
 import { calculateUserBalance } from '../services/balanceService.js';
 
 const router = Router();
@@ -12,7 +13,8 @@ router.use(authMiddleware);
 // Create expense
 router.post('/:groupId/expenses', async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) {
+    const user = await getResolvedUser(req);
+    if (!user) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
@@ -43,7 +45,7 @@ router.post('/:groupId/expenses', async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const userMembership = group.members.find((m: any) => m.user_id === req.user!.id && !m.left_at);
+    const userMembership = group.members.find((m: any) => m.user_id === user.id && !m.left_at);
     if (!userMembership) {
       res.status(403).json({ error: 'Not an active member of this group' });
       return;
@@ -53,7 +55,7 @@ router.post('/:groupId/expenses', async (req: AuthRequest, res: Response) => {
     const expense = await prisma.expense.create({
       data: {
         group_id: group.id,
-        paid_by_id: req.user.id,
+        paid_by_id: user.id,
         description,
         amount_original: new Decimal(amount_original),
         currency,
@@ -86,7 +88,8 @@ router.post('/:groupId/expenses', async (req: AuthRequest, res: Response) => {
 // Get group expenses
 router.get('/:groupId/expenses', async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) {
+    const user = await getResolvedUser(req);
+    if (!user) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
@@ -101,7 +104,7 @@ router.get('/:groupId/expenses', async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const userMembership = group.members.find((m: any) => m.user_id === req.user!.id);
+    const userMembership = group.members.find((m: any) => m.user_id === user.id);
     if (!userMembership) {
       res.status(403).json({ error: 'Not a member of this group' });
       return;
@@ -126,7 +129,8 @@ router.get('/:groupId/expenses', async (req: AuthRequest, res: Response) => {
 // Get expense details
 router.get('/:groupId/expenses/:expenseId', async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) {
+    const user = await getResolvedUser(req);
+    if (!user) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
@@ -146,7 +150,7 @@ router.get('/:groupId/expenses/:expenseId', async (req: AuthRequest, res: Respon
     }
 
     // Check membership
-    const isMember = expense.group.members.some((m: any) => m.user_id === req.user!.id && !m.left_at);
+    const isMember = expense.group.members.some((m: any) => m.user_id === user.id && !m.left_at);
     if (!isMember) {
       res.status(403).json({ error: 'Not a member of this group' });
       return;
@@ -162,7 +166,8 @@ router.get('/:groupId/expenses/:expenseId', async (req: AuthRequest, res: Respon
 // Delete expense
 router.delete('/:groupId/expenses/:expenseId', async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) {
+    const user = await getResolvedUser(req);
+    if (!user) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
@@ -178,7 +183,7 @@ router.delete('/:groupId/expenses/:expenseId', async (req: AuthRequest, res: Res
     }
 
     // Only creator can delete
-    if (expense.paid_by_id !== req.user.id) {
+    if (expense.paid_by_id !== user.id) {
       res.status(403).json({ error: 'Only creator can delete expense' });
       return;
     }
@@ -234,15 +239,16 @@ router.get('/:groupId/balances', async (req: AuthRequest, res: Response) => {
 // Get user's balance in group (with breakdown)
 router.get('/:groupId/my-balance', async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) {
+    const user = await getResolvedUser(req);
+    if (!user) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
-    const { balance, breakdown } = await calculateUserBalance(req.user.id, req.params.groupId);
+    const { balance, breakdown } = await calculateUserBalance(user.id, req.params.groupId);
 
     res.json({
-      userId: req.user.id,
+      userId: user.id,
       balance: balance.toString(),
       breakdown
     });
