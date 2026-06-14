@@ -25,7 +25,10 @@ export async function calculateUserBalance(
   }
 
   // Define date range: from join date to leave date (or now)
-  const activeFrom = membership.joined_at;
+  // Normalize activeFrom to start of day (midnight UTC) so expenses entered
+  // on the same calendar day as joining are not excluded by time-of-day mismatch.
+  const rawFrom = membership.joined_at;
+  const activeFrom = new Date(Date.UTC(rawFrom.getUTCFullYear(), rawFrom.getUTCMonth(), rawFrom.getUTCDate()));
   const activeTo = membership.left_at || new Date();
 
   // Get all expenses in this group during user's active period
