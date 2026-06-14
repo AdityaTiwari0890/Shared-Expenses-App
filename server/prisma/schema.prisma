@@ -1,0 +1,198 @@
+// Prisma Schema for Shared Expenses App
+// Last Updated: 2026-06-14
+// Database: PostgreSQL
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                String                @id @default(cuid())
+  email             String                @unique
+  password_hash     String
+  first_name        String
+  last_name         String
+  created_at        DateTime              @default(now())
+  updated_at        DateTime              @updatedAt
+
+  // Relations
+  group_memberships GroupMember[]
+  created_groups    Group[]               @relation("created_by")
+  paid_expenses     Expense[]             @relation("paid_by")
+  expense_splits    ExpenseSplit[]
+  settlements_from  Settlement[]          @relation("from_user")
+  settlements_to    Settlement[]          @relation("to_user")
+  import_logs       ImportLog[]
+  import_approvals  ImportAnomaly[]       @relation("approved_by")
+
+  @@index([email])
+}
+
+model Group {
+  id                String                @id @default(cuid())
+  name              String                @db.VarChar(255)
+  description       String?               @db.Text
+  created_by_id     String
+  created_at        DateTime              @default(now())
+  updated_at        DateTime              @updatedAt
+
+  // Relations
+  created_by        User                  @relation("created_by", fields: [created_by_id], references: [id], onDelete: Cascade)
+  members           GroupMember[]         @relation("group_members")
+  expenses          Expense[]
+  settlements       Settlement[]
+  import_logs       ImportLog[]
+
+  @@index([created_by_id])
+}
+
+model GroupMember {
+  id                String                @id @default(cuid())
+  group_id          String
+  user_id           String
+  joined_at         DateTime              @default(now())
+  left_at           DateTime?             // Null means still active
+  created_at        DateTime              @default(now())
+
+  // Relations
+  group             Group                 @relation("group_members", fields: [group_id], references: [id], onDelete: Cascade)
+  user              User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([group_id, user_id])
+  @@index([group_id])
+  @@index([user_id])
+}
+
+model Expense {
+  id                String                @id @default(cuid())
+  group_id          String
+  paid_by_id        String
+  description       String                @db.VarChar(255)
+  amount_original   Decimal               @db.Decimal(12, 2)
+  currency          String                @default("INR") @db.VarChar(3)
+  date              DateTime
+  split_type        SplitType             @default(EQUAL)
+  notes             String?               @db.Text
+  is_settlement     Boolean               @default(false)
+  created_at        DateTime              @default(now())
+  updated_at        DateTime              @updatedAt
+
+  // Relations
+  group             Group                 @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  paid_by           User                  @relation("paid_by", fields: [paid_by_id], references: [id], onDelete: Cascade)
+  splits            ExpenseSplit[]
+
+  @@index([group_id])
+  @@index([paid_by_id])
+  @@index([date])
+}
+
+model ExpenseSplit {
+  id                String                @id @default(cuid())
+  expense_id        String
+  user_id           String
+  amount_owed       Decimal               @db.Decimal(12, 2)
+  percentage        Decimal?              @db.Decimal(5, 2) // For percentage splits
+  shares            Int?                  // For share-based splits
+  created_at        DateTime              @default(now())
+
+  // Relations
+  expense           Expense               @relation(fields: [expense_id], references: [id], onDelete: Cascade)
+  user              User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([expense_id, user_id])
+  @@index([expense_id])
+  @@index([user_id])
+}
+
+model Settlement {
+  id                String                @id @default(cuid())
+  group_id          String
+  from_user_id      String
+  to_user_id        String
+  amount            Decimal               @db.Decimal(12, 2)
+  currency          String                @default("INR") @db.VarChar(3)
+  date              DateTime              @default(now())
+  notes             String?               @db.Text
+  created_at        DateTime              @default(now())
+
+  // Relations
+  group             Group                 @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  from_user         User                  @relation("from_user", fields: [from_user_id], references: [id], onDelete: Cascade)
+  to_user           User                  @relation("to_user", fields: [to_user_id], references: [id], onDelete: Cascade)
+
+  @@index([group_id])
+  @@index([from_user_id])
+  @@index([to_user_id])
+}
+
+model ImportLog {
+  id                String                @id @default(cuid())
+  user_id           String
+  group_id          String
+  total_rows        Int
+  valid_rows        Int
+  rejected_rows     Int
+  import_timestamp  DateTime              @default(now())
+  report_json       Json                  // Full import report
+  created_at        DateTime              @default(now())
+
+  // Relations
+  user              User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  group             Group                 @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  anomalies         ImportAnomaly[]
+
+  @@index([user_id])
+  @@index([group_id])
+}
+
+model ImportAnomaly {
+  id                String                @id @default(cuid())
+  import_log_id     String
+  row_number        Int
+  anomaly_type      String                @db.VarChar(50)
+  severity          AnomalySeverity
+  description       String                @db.Text
+  raw_data          Json                  // Original CSV row
+  action_taken      String                @db.VarChar(50) // 'SKIP', 'IMPORT_WITH_CORRECTION', 'APPROVED_DELETION'
+  requires_approval Boolean               @default(false)
+  approved_at       DateTime?
+  approved_by_id    String?
+  created_at        DateTime              @default(now())
+
+  // Relations
+  import_log        ImportLog             @relation(fields: [import_log_id], references: [id], onDelete: Cascade)
+  approved_by       User?                 @relation("approved_by", fields: [approved_by_id], references: [id], onDelete: SetNull)
+
+  @@index([import_log_id])
+  @@index([approved_by_id])
+}
+
+model CurrencyConversion {
+  date              DateTime
+  from_currency     String                @db.VarChar(3)
+  to_currency       String                @db.VarChar(3)
+  rate              Decimal               @db.Decimal(12, 6)
+  updated_at        DateTime              @updatedAt
+
+  @@id([date, from_currency, to_currency])
+}
+
+enum SplitType {
+  EQUAL
+  PERCENTAGE
+  EXACT
+  SHARE
+}
+
+enum AnomalySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
