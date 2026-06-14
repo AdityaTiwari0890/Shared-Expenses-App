@@ -8,8 +8,8 @@ import { getResolvedUser } from '../lib/requestUser.js';
 import {
   detectAnomalies,
   CSVRow,
-  AnomalyDetectionResult
 } from '../services/anomalyDetectionService.js';
+import { importValidRows } from '../services/importService.js';
 
 const router = Router();
 
@@ -65,7 +65,9 @@ router.post('/:groupId/preview', async (req: AuthRequest, res: Response) => {
             valid: anomalyResults.validRows.length,
             rejected: anomalyResults.rejectedRows.length,
             anomalies: anomalyResults.anomalies.length
-          }
+          },
+          valid_rows: anomalyResults.validRows,
+          rejected_rows: anomalyResults.rejectedRows
         },
         anomalies: {
           create: anomalyResults.anomalies.map((anomaly: any) => ({
@@ -92,13 +94,14 @@ router.post('/:groupId/preview', async (req: AuthRequest, res: Response) => {
         critical_anomalies: anomalyResults.anomalies.filter((a: any) => a.severity === 'CRITICAL').length,
         high_anomalies: anomalyResults.anomalies.filter((a: any) => a.severity === 'HIGH').length
       },
-      anomalies: anomalyResults.anomalies.map((a: any) => ({
-        rowIndex: a.rowIndex,
-        type: a.type,
+      anomalies: importLog.anomalies.map((a) => ({
+        id: a.id,
+        rowIndex: a.row_number,
+        type: a.anomaly_type,
         severity: a.severity,
         description: a.description,
-        suggestedAction: a.suggestedAction,
-        requiresApproval: a.requiresApproval
+        suggestedAction: a.action_taken,
+        requiresApproval: a.requires_approval
       }))
     });
   } catch (error) {
@@ -121,7 +124,7 @@ router.post('/:groupId/finalize/:importLogId', async (req: AuthRequest, res: Res
     }
 
     const { approvals } = z.object({
-      approvals: z.record(z.boolean()) // anomalyId -> approved
+      approvals: z.record(z.boolean()).optional().default({})
     }).parse(req.body);
 
     const importLog = await prisma.importLog.findUnique({
@@ -134,13 +137,38 @@ router.post('/:groupId/finalize/:importLogId', async (req: AuthRequest, res: Res
       return;
     }
 
+    if (importLog.group_id !== req.params.groupId) {
+      res.status(400).json({ error: 'Import does not belong to this group' });
+      return;
+    }
+
     if (importLog.user_id !== user.id) {
       res.status(403).json({ error: 'Can only approve own imports' });
       return;
     }
 
-    // Update anomaly approvals
+    const reportJson = importLog.report_json as {
+      summary?: Record<string, number>;
+      valid_rows?: CSVRow[];
+      finalized?: boolean;
+    };
+
+    if (reportJson.finalized) {
+      res.status(400).json({ error: 'This import has already been completed' });
+      return;
+    }
+
+    const validRows = reportJson.valid_rows ?? [];
+    if (validRows.length === 0) {
+      res.status(400).json({ error: 'No valid rows to import. Fix CSV errors and upload again.' });
+      return;
+    }
+
+    // Update anomaly approvals using real database IDs
     for (const [anomalyId, approved] of Object.entries(approvals)) {
+      const anomaly = importLog.anomalies.find((a) => a.id === anomalyId);
+      if (!anomaly) continue;
+
       await prisma.importAnomaly.update({
         where: { id: anomalyId },
         data: {
@@ -150,17 +178,28 @@ router.post('/:groupId/finalize/:importLogId', async (req: AuthRequest, res: Res
       });
     }
 
-    // Re-fetch and process import (simplified - full implementation would process all rows)
-    const updatedLog = await prisma.importLog.findUnique({
+    const result = await importValidRows(importLog.group_id, validRows, user.id);
+
+    await prisma.importLog.update({
       where: { id: importLog.id },
-      include: { anomalies: true }
+      data: {
+        report_json: {
+          ...reportJson,
+          finalized: true,
+          imported_count: result.imported,
+          skipped_count: result.skipped,
+          errors: result.errors
+        }
+      }
     });
 
     res.json({
       success: true,
-      message: 'Import processing started',
+      message: `Successfully imported ${result.imported} expense(s)`,
       importLogId: importLog.id,
-      anomaliesProcessed: updatedLog?.anomalies.length
+      imported: result.imported,
+      skipped: result.skipped,
+      errors: result.errors
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

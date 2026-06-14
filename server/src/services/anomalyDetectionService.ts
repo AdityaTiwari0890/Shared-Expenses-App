@@ -243,7 +243,7 @@ export async function detectAnomalies(
   };
 }
 
-function parseDate(dateStr: string): Date | null {
+export function parseDate(dateStr: string): Date | null {
   // Try multiple date formats
   const formats = [
     /^(\d{2})-(\d{2})-(\d{4})$/, // DD-MM-YYYY

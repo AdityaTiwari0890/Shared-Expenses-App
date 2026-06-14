@@ -4,6 +4,7 @@ import { ArrowLeft, Upload, AlertCircle, CheckCircle } from 'lucide-react';
 import { importAPI } from '../lib/api';
 
 interface Anomaly {
+  id: string;
   rowIndex: number;
   type: string;
   severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
@@ -63,20 +64,35 @@ function ImportPage() {
   };
 
   const handleCompleteImport = async () => {
-    if (!groupId || !importLogId) return;
+    if (!groupId || !importLogId) {
+      setError('Import session expired. Please analyze the file again.');
+      return;
+    }
+
+    if (summary?.valid_rows === 0) {
+      setError('No valid rows to import. Fix CSV errors and upload again.');
+      return;
+    }
 
     setError('');
     setIsFinalizing(true);
 
     try {
       const approvals: Record<string, boolean> = {};
-      anomalies.forEach((_, idx) => {
-        approvals[`anomaly-${idx}`] = true;
+      anomalies.forEach((anomaly) => {
+        if (anomaly.id) {
+          approvals[anomaly.id] = true;
+        }
       });
 
-      await importAPI.finalizeImport(groupId, importLogId, approvals);
-      setSuccessMessage('Import completed successfully!');
-      setTimeout(() => navigate(`/groups/${groupId}`), 1500);
+      const { data } = await importAPI.finalizeImport(groupId, importLogId, approvals);
+      const imported = data.imported ?? 0;
+      setSuccessMessage(
+        imported > 0
+          ? `Successfully imported ${imported} expense(s)!`
+          : data.message || 'Import completed.'
+      );
+      setTimeout(() => navigate(`/groups/${groupId}`), 2000);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to complete import');
     } finally {
@@ -185,12 +201,20 @@ function ImportPage() {
               </div>
 
               {summary.critical_anomalies > 0 && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6 flex gap-3">
+                <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded-lg mb-6 flex gap-3">
                   <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold">Critical issues found</p>
-                    <p className="text-sm">Review anomalies below before completing import</p>
+                    <p className="font-semibold">{summary.critical_anomalies} row(s) will be skipped</p>
+                    <p className="text-sm">
+                      Valid rows ({summary.valid_rows}) will still be imported when you click Complete Import
+                    </p>
                   </div>
+                </div>
+              )}
+
+              {summary.valid_rows === 0 && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6">
+                  No valid rows to import. Upload a corrected CSV file.
                 </div>
               )}
             </div>
@@ -243,11 +267,11 @@ function ImportPage() {
                 </button>
                 <button
                   onClick={handleCompleteImport}
-                  disabled={isFinalizing || summary.critical_anomalies > 0}
+                  disabled={isFinalizing || summary.valid_rows === 0}
                   className="btn-primary disabled:opacity-50"
                 >
                   <CheckCircle size={20} className="inline mr-2" />
-                  {isFinalizing ? 'Importing...' : 'Complete Import'}
+                  {isFinalizing ? 'Importing...' : `Complete Import (${summary.valid_rows} rows)`}
                 </button>
               </div>
             </div>
