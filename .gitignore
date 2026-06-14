@@ -1,0 +1,7 @@
+node_modules
+dist
+build
+.DS_Store
+.env
+server/node_modules
+client/node_modules
