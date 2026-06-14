@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { Decimal } from '@prisma/client/runtime/library';
+import { Prisma } from '@prisma/client';
 import Papa from 'papaparse';
 import { prisma } from '../index.js';
 import { authMiddleware, AuthRequest } from '../lib/auth.js';
@@ -68,7 +69,7 @@ router.post('/:groupId/preview', async (req: AuthRequest, res: Response) => {
           },
           valid_rows: anomalyResults.validRows,
           rejected_rows: anomalyResults.rejectedRows
-        },
+        } as Prisma.InputJsonValue,
         anomalies: {
           create: anomalyResults.anomalies.map((anomaly: any) => ({
             row_number: anomaly.rowIndex,
@@ -84,6 +85,9 @@ router.post('/:groupId/preview', async (req: AuthRequest, res: Response) => {
       include: { anomalies: true }
     });
 
+    const report = importLog.report_json as any;
+    const anomaliesList = report?.anomalies || [];
+
     res.json({
       success: true,
       importLogId: importLog.id,
@@ -94,7 +98,7 @@ router.post('/:groupId/preview', async (req: AuthRequest, res: Response) => {
         critical_anomalies: anomalyResults.anomalies.filter((a: any) => a.severity === 'CRITICAL').length,
         high_anomalies: anomalyResults.anomalies.filter((a: any) => a.severity === 'HIGH').length
       },
-      anomalies: importLog.anomalies.map((a) => ({
+      anomalies: anomaliesList.map((a: any) => ({
         id: a.id,
         rowIndex: a.row_number,
         type: a.anomaly_type,

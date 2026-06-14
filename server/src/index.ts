@@ -1,5 +1,7 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 
@@ -12,6 +14,9 @@ import importRoutes from './routes/import.js';
 
 // Load environment variables
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app: Express = express();
 const prisma = new PrismaClient();
@@ -39,6 +44,14 @@ app.use('/api/groups', groupRoutes);
 app.use('/api/groups', expenseRoutes);
 app.use('/api/groups', settlementRoutes);
 app.use('/api/import', importRoutes);
+
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../dist/public')));
+  app.get('*', (_req: Request, res: Response) => {
+    res.sendFile(path.join(__dirname, '../dist/public', 'index.html'));
+  });
+}
 
 // 404 handler
 app.use((_req: Request, res: Response) => {

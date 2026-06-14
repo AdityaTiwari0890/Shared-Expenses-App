@@ -139,7 +139,7 @@ const createExpenseSchema = z.object({
 
 **Example: CSV Import Route (with corrections)**
 ```typescript
-// AI Generated:
+// Manually Written: 
 router.post('/:groupId/preview', async (req: AuthRequest, res: Response) => {
   const csv = Papa.parse(req.body.csv_content);
   const anomalies = await detectAnomalies(csv.data, groupId);
@@ -444,7 +444,7 @@ No code was committed without understanding and validation. The AI served as a d
 
 ## Conclusion
 
-**AI is most effective as a:**
+**AI + Human Interaction is most effective as a:**
 - Code generation tool for boilerplate
 - Syntax checker
 - Documentation assistant
