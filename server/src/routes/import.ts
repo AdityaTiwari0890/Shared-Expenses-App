@@ -69,7 +69,7 @@ router.post('/:groupId/preview', async (req: AuthRequest, res: Response) => {
           },
           valid_rows: anomalyResults.validRows,
           rejected_rows: anomalyResults.rejectedRows
-        } as Prisma.InputJsonValue,
+        } as unknown as Prisma.InputJsonValue,
         anomalies: {
           create: anomalyResults.anomalies.map((anomaly: any) => ({
             row_number: anomaly.rowIndex,
@@ -193,7 +193,7 @@ router.post('/:groupId/finalize/:importLogId', async (req: AuthRequest, res: Res
           imported_count: result.imported,
           skipped_count: result.skipped,
           errors: result.errors
-        }
+        } as unknown as Prisma.InputJsonValue
       }
     });
 

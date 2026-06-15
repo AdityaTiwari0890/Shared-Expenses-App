@@ -9,6 +9,6 @@
         "build:server": "cd server && npm run build",
         "build": "npm run build:client && npm run build:server",
         "start": "cd server && node dist/index.js",
-        "postinstall": "npm run install:all && cd server && npx prisma generate"
+        "postinstall": "cd server && npx prisma generate || true"
     }
 }
